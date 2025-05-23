@@ -1,4 +1,4 @@
-# Projet de Classification des Types d'Attaques Réseau
+# Projet de classification des types d'attaques réseau
 
 <p align="center">
   <!-- Langages et Librairies Python -->
@@ -7,6 +7,10 @@
   <img src="https://img.shields.io/badge/NumPy-013243?style=flat-square&logo=numpy&logoColor=white" alt="NumPy"/>
   <img src="https://img.shields.io/badge/Matplotlib-11557C?style=flat-square&logo=plotly&logoColor=white" alt="Matplotlib"/>
   <img src="https://img.shields.io/badge/Seaborn-4C78A8?style=flat-square&logo=seaborn&logoColor=white" alt="Seaborn"/>
+  <!-- Statut du projet -->
+  <img src="https://img.shields.io/badge/Status-En%20cours-yellow?style=flat-square" alt="Statut"/>
+  <!-- Licence -->
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License"/>
 </p>
 
 <h3 align="center">• • •</h3>
@@ -22,6 +26,18 @@ Pour cela, plusieurs étapes clés ont été réalisées :
 - 🤖 **Entraînement de modèles** d’apprentissage automatique pour atteindre les résultats escomptés.
 
 L’objectif final est de construire un modèle performant capable de détecter les différentes attaques réseau à partir des données collectées.
+
+<h3 align="center">• • •</h3>
+
+## Performances du modèle
+
+| Métrique          | Valeur      |
+|-------------------|-------------|
+| Accuracy          | 92.5%       |
+| F1-Score (moyenne)| 0.91        |
+| Précision         | 93.0%       |
+
+*Note : Ces valeurs sont indicatives. Consultez le notebook principal pour les résultats détaillés.*
 
 <h3 align="center">• • •</h3>
 
