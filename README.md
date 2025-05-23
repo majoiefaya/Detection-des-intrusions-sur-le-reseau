@@ -29,18 +29,6 @@ L’objectif final est de construire un modèle performant capable de détecter 
 
 <h3 align="center">• • •</h3>
 
-## Performances du modèle
-
-| Métrique          | Valeur      |
-|-------------------|-------------|
-| Accuracy          | 92.5%       |
-| F1-Score (moyenne)| 0.91        |
-| Précision         | 93.0%       |
-
-*Note : Ces valeurs sont indicatives. Consultez le notebook principal pour les résultats détaillés.*
-
-<h3 align="center">• • •</h3>
-
 ## Visualisations clés
 
 <p align="center">
@@ -62,6 +50,18 @@ L’objectif final est de construire un modèle performant capable de détecter 
 <h3 align="center">• • •</h3>
 
 *Ce projet s’inscrit dans une démarche d’apprentissage et d’application des techniques de data science en cybersécurité.*
+
+<h3 align="center">• • •</h3>
+
+## Performances du modèle
+
+| Métrique          | Valeur      |
+|-------------------|-------------|
+| Accuracy          | 92.5%       |
+| F1-Score (moyenne)| 0.91        |
+| Précision         | 93.0%       |
+
+*Note : Ces valeurs sont indicatives. Consultez le notebook principal pour les résultats détaillés.*
 
 <h3 align="center">• • •</h3>
 
