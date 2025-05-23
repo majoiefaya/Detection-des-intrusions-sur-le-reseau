@@ -73,7 +73,7 @@ def train_model(X, y):
     return model
 
 # Load dataset
-file_path = os.path.join(os.path.dirname(__file__), 'dataset.csv')
+file_path = os.path.join(os.path.dirname(__file__), '../datasets/dataset.csv')
 dataset, scaler, le = load_and_preprocess_data(file_path)
 
 if dataset is not None:
