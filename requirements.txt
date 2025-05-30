@@ -6,3 +6,6 @@ seaborn
 plotly
 scikit-learn
 catboost
+imblearn 
+lightgbm 
+xgboost 
