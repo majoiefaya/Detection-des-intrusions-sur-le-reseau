@@ -1,234 +1,205 @@
-# -*- coding: utf-8 -*-
-"""
-Streamlit application for network attack type prediction.
-This app allows users to explore the dataset, visualize key insights, and predict network attack types using a pre-trained Random Forest model.
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from imblearn.over_sampling import SMOTE
+from catboost import CatBoostClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
+import plotly.express as px
+import plotly.graph_objects as go
+import re
+import uuid
 import os
-import joblib
-
 # Set page configuration
-st.set_page_config(page_title="Network Attack Detection", layout="wide")
+st.set_page_config(page_title="Intrusion Detection Dashboard", layout="wide")
 
-# Cache the data loading and preprocessing to optimize performance
-@st.cache_data
-def load_and_preprocess_data(file_path):
-    try:
-        # Load dataset
-        dataset = pd.read_csv(file_path)
-        
-        # Check for missing values
-        if dataset.isnull().sum().sum() > 0:
-            st.warning("Missing values detected. Filling with zeros for simplicity.")
-            dataset.fillna(0, inplace=True)
-        
-        # Encode categorical variables
-        le = LabelEncoder()
-        dataset['protocol_type_encoded'] = le.fit_transform(dataset['protocol_type'])
-        dataset['service_encoded'] = le.fit_transform(dataset['service'])
-        dataset['flag_encoded'] = le.fit_transform(dataset['flag'])
-        dataset['Attack Type_encoded'] = le.fit_transform(dataset['Attack Type'])
-        
-        # Log transformation for numerical variables
-        numerical_columns = [
-            'src_bytes', 'dst_bytes', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 
-            'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate',
-            'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 
-            'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
-            'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 
-            'dst_host_srv_rerror_rate'
-        ]
-        for col in numerical_columns:
-            dataset[f"{col}_log"] = np.log1p(dataset[col].clip(lower=0))
-        
-        # Normalize numerical features
-        scaler = StandardScaler()
-        dataset[[f"{col}_log" for col in numerical_columns]] = scaler.fit_transform(
-            dataset[[f"{col}_log" for col in numerical_columns]]
-        )
-        
-        return dataset, scaler, le
-    except FileNotFoundError:
-        st.error("Dataset file not found. Please ensure 'dataset.csv' is in the correct directory.")
-        return None, None, None
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        return None, None, None
-
-# Train and save model (or load if already trained)
-@st.cache_resource
-def train_model(X, y):
-    model = RandomForestClassifier(random_state=42)
-    model.fit(X, y)
-    joblib.dump(model, "random_forest_model.pkl")
-    return model
+# Title and description
+st.title("Intrusion Detection Dashboard")
+st.markdown("""
+This application allows you to explore the intrusion detection dataset, train machine learning models, and visualize their performance.
+Use the tabs below to navigate through different sections of the analysis.
+""")
 
 # Load dataset
-file_path = os.path.join(os.path.dirname(__file__), '../datasets/dataset.csv')
-dataset, scaler, le = load_and_preprocess_data(file_path)
+@st.cache_data
+def load_data():
+    # Replace with the actual path to your dataset
+    file_path = os.path.join(os.path.dirname(__file__), '../datasets/dataset.csv')
+    dataset = pd.read_csv(file_path)  # Update this path as needed
+    return dataset
 
-if dataset is not None:
-    # Sidebar for user options
-    st.sidebar.title("Network Attack Detection App")
-    task = st.sidebar.selectbox(
-        "Choose a Task",
-        ["Overview", "Data Exploration", "Visualizations", "Predict Attack Type"]
-    )
+dataset = load_data()
 
-    # Main content based on user selection
-    st.title("Network Attack Detection Dashboard")
+# Preprocessing function
+def preprocess_data(dataset, apply_smote=False):
+    dataset = dataset.copy()
+    
+    # Encode categorical columns
+    categorical_columns = dataset.select_dtypes(include=['object']).columns
+    for col in categorical_columns:
+        dataset[col] = dataset[col].astype('category').cat.codes
+    
+    # Create derived features
+    dataset['total_bytes'] = dataset['src_bytes'] + dataset['dst_bytes']
+    dataset['bytes_ratio'] = dataset['src_bytes'] / (dataset['dst_bytes'] + 1)
+    dataset['log_src_bytes'] = (dataset['src_bytes'] + 1).apply(np.log)
+    dataset['log_dst_bytes'] = (dataset['dst_bytes'] + 1).apply(np.log)
+    
+    # Encode target
+    dataset['Attack Type'] = dataset['Attack Type'].astype('category').cat.codes
+    
+    # Separate features and target
+    X = dataset.drop(columns=['target', 'Attack Type'])
+    y = dataset['Attack Type']
+    
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    if apply_smote:
+        smote = SMOTE(random_state=42)
+        X_train, y_train = smote.fit_resample(X_train, y_train)
+    
+    return X_train, X_test, y_train, y_test
 
-    if task == "Overview":
-        st.header("Dataset Overview")
-        st.write("This application analyzes network logs to predict types of network attacks (e.g., normal, DoS, probe, R2L, U2R).")
-        st.subheader("Dataset Snapshot")
-        st.dataframe(dataset.head())
-        st.subheader("Dataset Info")
-        st.write(dataset.info())
-        st.subheader("Summary Statistics")
-        st.dataframe(dataset.describe())
-        st.subheader("Missing Values")
-        st.write(dataset.isnull().sum())
-        st.subheader("Class Distribution (Attack Type)")
-        st.write(dataset['Attack Type'].value_counts())
+# Function to train and evaluate models
+@st.cache_resource
+def train_model(model_type, X_train, y_train, X_test, y_test, use_smote=False):
+    if model_type == "Random Forest":
+        model = RandomForestClassifier(random_state=42, max_depth=20, min_samples_leaf=1, min_samples_split=5, n_estimators=100)
+    elif model_type == "CatBoost":
+        model = CatBoostClassifier(verbose=0, random_state=42, depth=6, iterations=100, l2_leaf_reg=3, learning_rate=0.1)
+    elif model_type == "XGBoost":
+        model = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42)
+    elif model_type == "Decision Tree":
+        model = DecisionTreeClassifier(random_state=42)
+    elif model_type == "Extra Trees":
+        model = ExtraTreesClassifier(random_state=42)
+    elif model_type == "LightGBM":
+        model = LGBMClassifier(random_state=42, verbose=-1)
+    elif model_type == "MLP":
+        model = MLPClassifier(hidden_layer_sizes=(100,), max_iter=100, random_state=42)
+    
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    class_report = classification_report(y_test, y_pred, output_dict=True)
+    
+    return model, conf_matrix, class_report, y_pred
 
-    elif task == "Data Exploration":
-        st.header("Data Exploration")
-        st.subheader("Select a Feature to Explore")
-        feature = st.selectbox("Feature", dataset.columns)
-        st.write(f"**Description of {feature}**")
-        st.write(dataset[feature].describe())
-        st.write(f"Unique Values: {dataset[feature].nunique()}")
-        if dataset[feature].dtype in ['int64', 'float64']:
-            st.write("Distribution Plot")
-            fig, ax = plt.subplots()
-            sns.histplot(dataset[feature], bins=50, kde=True, ax=ax)
-            ax.set_title(f"Distribution of {feature}")
-            st.pyplot(fig)
-        else:
-            st.write("Value Counts")
-            st.bar_chart(dataset[feature].value_counts())
+# Function to extract f1-scores
+def extract_f1_scores(report, class_idx=None):
+    if class_idx is None:
+        return float(report['macro avg']['f1-score'])
+    return float(report[str(class_idx)]['f1-score'])
 
-    elif task == "Visualizations":
-        st.header("Visualizations")
-        viz_type = st.selectbox(
-            "Select Visualization",
-            ["Correlation Heatmap", "Feature Importance", "Attack Type Distribution", "Boxplot of Numeric Feature"]
-        )
-        
-        if viz_type == "Correlation Heatmap":
-            st.subheader("Correlation Heatmap")
-            numeric_columns = dataset.select_dtypes(include=['number']).columns
-            fig, ax = plt.subplots(figsize=(12, 10))
-            sns.heatmap(dataset[numeric_columns].corr(), annot=False, cmap='coolwarm', linewidths=0.5, ax=ax)
-            ax.set_title("Correlation Matrix")
-            st.pyplot(fig)
-        
-        elif viz_type == "Feature Importance":
-            st.subheader("Feature Importance (Random Forest)")
-            X = dataset[[f"{col}_log" for col in [
-                'src_bytes', 'dst_bytes', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 
-                'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate',
-                'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 
-                'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
-                'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 
-                'dst_host_srv_rerror_rate'
-            ]]]
-            y = dataset['Attack Type_encoded']
-            model = train_model(X, y)
-            feat_importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            feat_importances.plot(kind='bar', ax=ax)
-            ax.set_title("Feature Importance")
-            st.pyplot(fig)
-        
-        elif viz_type == "Attack Type Distribution":
-            st.subheader("Attack Type Distribution")
-            fig, ax = plt.subplots(figsize=(8, 4))
-            sns.countplot(x='Attack Type', data=dataset, ax=ax)
-            ax.set_title("Distribution of Attack Types")
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
-            st.pyplot(fig)
-        
-        elif viz_type == "Boxplot of Numeric Feature":
-            st.subheader("Boxplot")
-            numeric_feature = st.selectbox("Select Numeric Feature", dataset.select_dtypes(include=['number']).columns)
-            fig, ax = plt.subplots(figsize=(8, 4))
-            sns.boxplot(x=dataset[numeric_feature], ax=ax)
-            ax.set_title(f"Boxplot of {numeric_feature}")
-            st.pyplot(fig)
+# Create tabs for different sections
+tab1, tab2, tab3, tab4 = st.tabs(["Data Exploration", "Model Training", "Model Performance", "Feature Importance"])
 
-    elif task == "Predict Attack Type":
-        st.header("Predict Attack Type")
-        st.write("Enter network log features to predict the type of attack.")
+with tab1:
+    st.header("Data Exploration")
+    
+    # Dataset overview
+    st.subheader("Dataset Overview")
+    st.write(f"Number of rows: {dataset.shape[0]}")
+    st.write(f"Number of columns: {dataset.shape[1]}")
+    st.dataframe(dataset.head())
+    
+    # Descriptive statistics
+    st.subheader("Descriptive Statistics")
+    desc_stats = dataset.describe().T[['mean', '50%', 'std', 'min', 'max']].rename(columns={'50%': 'median'})
+    st.dataframe(desc_stats)
+    
+    # Attack type distribution
+    st.subheader("Attack Type Distribution")
+    attack_counts = dataset['Attack Type'].value_counts(normalize=True).rename('proportion').to_frame().join(dataset['Attack Type'].value_counts().rename('count'))
+    st.dataframe(attack_counts)
+    
+    # Plot attack type distribution
+    fig = px.bar(attack_counts.reset_index(), x='index', y='count', title="Attack Type Distribution", labels={'index': 'Attack Type', 'count': 'Count'})
+    st.plotly_chart(fig)
+    
+    # Correlation heatmap
+    st.subheader("Correlation Heatmap")
+    corr_matrix = dataset.corr(numeric_only=True)
+    fig = go.Figure(data=go.Heatmap(z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.columns, colorscale='RdBu', zmin=-1, zmax=1))
+    fig.update_layout(title="Correlation Heatmap", width=800, height=600)
+    st.plotly_chart(fig)
+
+with tab2:
+    st.header("Model Training")
+    
+    # Model selection
+    model_options = ["Random Forest", "CatBoost", "XGBoost", "Decision Tree", "Extra Trees", "LightGBM", "MLP"]
+    selected_model = st.selectbox("Select Model", model_options)
+    
+    # SMOTE option
+    use_smote = st.checkbox("Apply SMOTE for class imbalance", value=False)
+    
+    # Train button
+    if st.button("Train Model"):
+        with st.spinner("Training model..."):
+            X_train, X_test, y_train, y_test = preprocess_data(dataset, apply_smote=use_smote)
+            model, conf_matrix, class_report, y_pred = train_model(selected_model, X_train, y_train, X_test, y_test, use_smote)
+            
+            st.session_state['model'] = model
+            st.session_state['conf_matrix'] = conf_matrix
+            st.session_state['class_report'] = class_report
+            st.session_state['y_pred'] = y_pred
+            st.session_state['model_type'] = selected_model
+            st.session_state['use_smote'] = use_smote
+            st.success(f"{selected_model} trained successfully!")
+
+with tab3:
+    st.header("Model Performance")
+    
+    if 'model' in st.session_state:
+        st.subheader(f"Performance of {st.session_state['model_type']}")
         
-        # Input fields for features
-        input_features = {}
-        for col in [
-            'src_bytes', 'dst_bytes', 'count', 'srv_count', 'serror_rate', 'srv_serror_rate', 
-            'rerror_rate', 'srv_rerror_rate', 'same_srv_rate', 'diff_srv_rate', 'srv_diff_host_rate',
-            'dst_host_count', 'dst_host_srv_count', 'dst_host_same_srv_rate', 
-            'dst_host_diff_srv_rate', 'dst_host_same_src_port_rate', 'dst_host_srv_diff_host_rate',
-            'dst_host_serror_rate', 'dst_host_srv_serror_rate', 'dst_host_rerror_rate', 
-            'dst_host_srv_rerror_rate'
-        ]:
-            input_features[col] = st.number_input(f"{col}", min_value=0.0, value=0.0, step=0.1)
+        # Confusion matrix
+        st.write("Confusion Matrix")
+        fig = go.Figure(data=go.Heatmap(z=st.session_state['conf_matrix'], x=[f'Pred {i}' for i in range(st.session_state['conf_matrix'].shape[1])], 
+                                        y=[f'True {i}' for i in range(st.session_state['conf_matrix'].shape[0])], 
+                                        colorscale='Blues', text=st.session_state['conf_matrix'], texttemplate="%{text}"))
+        fig.update_layout(title="Confusion Matrix", width=600, height=600)
+        st.plotly_chart(fig)
         
-        # Additional categorical inputs
-        protocol_type = st.selectbox("Protocol Type", dataset['protocol_type'].unique())
-        service = st.selectbox("Service", dataset['service'].unique())
-        flag = st.selectbox("Flag", dataset['flag'].unique())
+        # Classification report
+        st.write("Classification Report")
+        class_report_df = pd.DataFrame(st.session_state['class_report']).T
+        st.dataframe(class_report_df[['precision', 'recall', 'f1-score', 'support']])
         
-        if st.button("Predict"):
-            # Preprocess input
-            input_data = pd.DataFrame([input_features])
-            input_data['protocol_type_encoded'] = le.transform([protocol_type])[0]
-            input_data['service_encoded'] = le.transform([service])[0]
-            input_data['flag_encoded'] = le.transform([flag])[0]
-            
-            # Apply log transformation
-            for col in input_features.keys():
-                input_data[f"{col}_log"] = np.log1p(input_data[col].clip(lower=0))
-            
-            # Normalize input
-            input_data[[f"{col}_log" for col in input_features.keys()]] = scaler.transform(
-                input_data[[f"{col}_log" for col in input_features.keys()]]
-            )
-            
-            # Select features for prediction
-            features_for_model = [f"{col}_log" for col in input_features.keys()] + [
-                'protocol_type_encoded', 'service_encoded', 'flag_encoded'
-            ]
-            X_input = input_data[features_for_model]
-            
-            # Load or train model
-            X_train = dataset[features_for_model]
-            y_train = dataset['Attack Type_encoded']
-            model = train_model(X_train, y_train)
-            
-            # Predict
-            prediction = model.predict(X_input)[0]
-            attack_type = le.inverse_transform([prediction])[0]
-            
-            st.subheader("Prediction Result")
-            st.write(f"Predicted Attack Type: **{attack_type}**")
-            st.write("**Explanation**:")
-            st.write("- **Normal**: No attack, regular network traffic.")
-            st.write("- **DoS**: Denial of Service attack, overwhelming the network.")
-            st.write("- **Probe**: Scanning or probing attempts for reconnaissance.")
-            st.write("- **R2L**: Remote to Local, unauthorized access attempts.")
-            st.write("- **U2R**: User to Root, privilege escalation attempts.")
+        # F1-score comparison for class 4
+        st.subheader("F1-Score for Class 4 (Minority Class)")
+        f1_class4 = extract_f1_scores(st.session_state['class_report'], class_idx=4)
+        fig = go.Figure(data=[go.Bar(x=[st.session_state['model_type']], y=[f1_class4], text=[f"{f1_class4:.2f}"], textposition='auto')])
+        fig.update_layout(title="F1-Score for Class 4", yaxis_title="F1-Score", yaxis_range=[0, 1.1])
+        st.plotly_chart(fig)
+
+with tab4:
+    st.header("Feature Importance")
+    
+    if 'model' in st.session_state and hasattr(st.session_state['model'], 'feature_importances_'):
+        importances = st.session_state['model'].feature_importances_
+        features = dataset.drop(columns=['target', 'Attack Type']).columns
+        importance_df = pd.DataFrame({'Feature': features, 'Importance': importances}).sort_values(by='Importance', ascending=False)
+        
+        st.write("Top 10 Most Important Features")
+        st.dataframe(importance_df.head(10))
+        
+        # Plot feature importance
+        fig = px.bar(importance_df.head(10), x='Importance', y='Feature', orientation='h', title="Top 10 Feature Importance")
+        st.plotly_chart(fig)
+    else:
+        st.write("Feature importance is only available for models that support it (e.g., Random Forest, CatBoost, XGBoost, Extra Trees).")
 
 # Footer
-st.sidebar.markdown("---")
-st.sidebar.write("Built with Streamlit and scikit-learn")
-st.sidebar.write("Dataset: Network Intrusion Detection")
+st.markdown("---")
+st.markdown("Developed with Streamlit | Dataset: Intrusion Detection | © 2025")
