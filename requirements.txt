@@ -9,3 +9,4 @@ catboost
 imblearn 
 lightgbm 
 xgboost 
+plotly
