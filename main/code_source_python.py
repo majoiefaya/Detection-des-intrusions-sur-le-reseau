@@ -25,7 +25,7 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from imblearn.over_sampling import SMOTE
 import io
-import os 
+
 
 st.set_page_config(page_title="Détection d'Intrusions Réseau", layout="wide")
 
@@ -36,6 +36,7 @@ def load_data(uploaded_file):
     if uploaded_file is not None:
         return pd.read_csv(uploaded_file)
     else:
+        import os 
         file_path = os.path.join(os.path.dirname(__file__), '../datasets/dataset.csv')
         return pd.read_csv(file_path)
 
