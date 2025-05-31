@@ -25,7 +25,6 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from imblearn.over_sampling import SMOTE
 import io
-import os
 
 st.set_page_config(page_title="Détection d'Intrusions Réseau", layout="wide")
 
@@ -130,6 +129,8 @@ if st.button("🚀 Entraîner le modèle"):
         st.subheader("📌 Importance des variables")
         importances = model.feature_importances_
         features = X.columns
+        df_imp = pd.DataFrame({'Feature': features, 'Importance': importances})
+        st.dataframe(df_imp.sort_values(by="Importance", ascending=False).head(10))
         indices = np.argsort(importances)[::-1][:10]
         fig_imp, ax_imp = plt.subplots()
         ax_imp.barh(range(10), importances[indices][::-1])
