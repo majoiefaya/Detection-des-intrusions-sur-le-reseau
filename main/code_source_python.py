@@ -25,6 +25,7 @@ from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 from imblearn.over_sampling import SMOTE
 import io
+import os 
 
 st.set_page_config(page_title="Détection d'Intrusions Réseau", layout="wide")
 
